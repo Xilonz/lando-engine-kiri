@@ -3,9 +3,9 @@
 [![Lando API 3](https://img.shields.io/badge/lando-v3.x-blue.svg)](https://lando.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 <!-- BENCHMARK_BADGES:START -->
-[![Cold Boot](https://img.shields.io/badge/Cold%20Boot-28.5%25%20faster-brightgreen?style=flat-square)](#performance-benchmarks)
-[![Warm Restart](https://img.shields.io/badge/Warm%20Restart-21.9%25%20slower-orange?style=flat-square)](#performance-benchmarks)
-[![CLI Overhead](https://img.shields.io/badge/CLI%20Exec-9.6%25%20faster-brightgreen?style=flat-square)](#performance-benchmarks)
+[![Cold Boot](https://img.shields.io/badge/Cold%20Boot-66.8%25%20slower-orange?style=flat-square)](#performance-benchmarks)
+[![Warm Restart](https://img.shields.io/badge/Warm%20Restart-45.4%25%20slower-orange?style=flat-square)](#performance-benchmarks)
+[![CLI Overhead](https://img.shields.io/badge/CLI%20Exec-21.6%25%20faster-brightgreen?style=flat-square)](#performance-benchmarks)
 <!-- BENCHMARK_BADGES:END -->
 
 > **Make Lando run blazingly fast on the Kiri Engine.**
@@ -117,15 +117,16 @@ Example output:
 ## Performance Benchmarks
 
 > Automated benchmark executed on GitHub Actions runner (`ubuntu-latest`, 2 vCPU, 7GB RAM).  
-> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11).
+> Stack: Lightweight Alpine L337 container (`php:8.2-cli-alpine`, ~28 MB, built-in server).
 
 | Metric | Docker Engine | Kiri Engine | Difference |
 | :--- | :--- | :--- | :--- |
-| **Cold Boot (Pull & First Start)** | 29.5s | 21.1s | **28.5% faster** ⚡ |
-| **Warm Restart (`lando restart`)** | 20.3s | 24.7s | **21.9% slower** |
-| **CLI Exec Overhead (20x `lando php`)** | 11.4s (569ms/call) | 10.3s (514ms/call) | **9.6% faster** ⚡ |
-| **Bind Mount I/O (Read 500 files)** | 9ms | 7ms | **22.2% faster** ⚡ |
-| **HTTP Latency (100 GET requests)** | 0.14s (1.4ms/req) | 0.08s (0.8ms/req) | **43.1% faster** ⚡ |
+| **Cold Boot (Pull & First Start)** | 8.1s | 13.6s | **66.8% slower** |
+| **Warm Restart (3x avg `lando restart`)** | 2.3s | 3.4s | **45.4% slower** |
+| **CLI Exec Overhead (100x `lando php`)** | 43.8s (438ms/call) | 34.3s (343ms/call) | **21.6% faster** ⚡ |
+| **Bind Mount I/O (Read 1000 files)** | 13ms | 9ms | **30.8% faster** ⚡ |
+| **HTTP Latency (250 GET requests)** | 0.20s (0.8ms/req) | 0.16s (0.6ms/req) | **18.6% faster** ⚡ |
+| **Teardown (`lando destroy`)** | 1.3s | 0.9s | **35.6% faster** ⚡ |
 
 *Last benchmark run: 2026-11-23 (Kiri v0.2.2)*
 <!-- BENCHMARK_TABLE:END -->
