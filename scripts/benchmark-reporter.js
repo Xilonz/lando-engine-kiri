@@ -51,11 +51,11 @@ const tableMarkdown = `<!-- BENCHMARK_TABLE:START -->
 ## Performance Benchmarks
 
 > Automated benchmark executed on GitHub Actions runner (\`ubuntu-latest\`, 2 vCPU, 7GB RAM).  
-> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11 — pure container boot, zero downloads).
+> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11 — fresh pull and start from scratch).
 
 | Metric | Docker Engine | Kiri Engine | Difference |
 | :--- | :--- | :--- | :--- |
-| **Cold Boot (\`lando start\`)** | ${dockerBootSec}s | ${kiriBootSec}s | ${bootDiffText} |
+| **Cold Boot (Pull & First Start)** | ${dockerBootSec}s | ${kiriBootSec}s | ${bootDiffText} |
 | **CLI Exec Overhead (${kiri.cli_runs || 10}x \`lando php\`)** | ${dockerExecSec}s (${dockerAvgMs}ms/call) | ${kiriExecSec}s (${kiriAvgMs}ms/call) | ${execDiffText} |
 
 *Last benchmark run: ${dateStr} (Kiri ${kiriVer})*

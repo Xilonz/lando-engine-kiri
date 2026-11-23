@@ -44,13 +44,7 @@ jobs:
           EOF
           echo "<?php echo 'ok';" > index.php
 
-      - name: Warmup (Pull images and cache layers)
-        run: |
-          cd /tmp/bench-app
-          lando start -y
-          lando destroy -y
-
-      - name: Run Cold Boot Benchmark
+      - name: Run Cold Boot Benchmark (Pull & Start from scratch)
         run: |
           cd /tmp/bench-app
           START=$(date +%s%3N)
@@ -178,13 +172,7 @@ jobs:
           EOF
           echo "<?php echo 'ok';" > index.php
 
-      - name: Warmup (Pull images and cache layers)
-        run: |
-          cd /tmp/bench-app
-          lando start -y
-          lando destroy -y
-
-      - name: Run Cold Boot Benchmark
+      - name: Run Cold Boot Benchmark (Pull & Start from scratch)
         run: |
           cd /tmp/bench-app
           START=$(date +%s%3N)
