@@ -3,8 +3,9 @@
 [![Lando API 3](https://img.shields.io/badge/lando-v3.x-blue.svg)](https://lando.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 <!-- BENCHMARK_BADGES:START -->
-[![Cold Boot](https://img.shields.io/badge/Cold%20Boot-15.6%25%20slower-orange?style=flat-square)](#performance-benchmarks)
-[![CLI Overhead](https://img.shields.io/badge/CLI%20Exec-34.7%25%20faster-brightgreen?style=flat-square)](#performance-benchmarks)
+[![Cold Boot](https://img.shields.io/badge/Cold%20Boot-28.5%25%20faster-brightgreen?style=flat-square)](#performance-benchmarks)
+[![Warm Restart](https://img.shields.io/badge/Warm%20Restart-21.9%25%20slower-orange?style=flat-square)](#performance-benchmarks)
+[![CLI Overhead](https://img.shields.io/badge/CLI%20Exec-9.6%25%20faster-brightgreen?style=flat-square)](#performance-benchmarks)
 <!-- BENCHMARK_BADGES:END -->
 
 > **Make Lando run blazingly fast on the Kiri Engine.**
@@ -116,12 +117,15 @@ Example output:
 ## Performance Benchmarks
 
 > Automated benchmark executed on GitHub Actions runner (`ubuntu-latest`, 2 vCPU, 7GB RAM).  
-> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11 — fresh pull and start from scratch).
+> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11).
 
 | Metric | Docker Engine | Kiri Engine | Difference |
 | :--- | :--- | :--- | :--- |
-| **Cold Boot (Pull & First Start)** | 27.0s | 31.2s | **15.6% slower** |
-| **CLI Exec Overhead (10x `lando php`)** | 6.4s (644ms/call) | 4.2s (420ms/call) | **34.7% faster** ⚡ |
+| **Cold Boot (Pull & First Start)** | 29.5s | 21.1s | **28.5% faster** ⚡ |
+| **Warm Restart (`lando restart`)** | 20.3s | 24.7s | **21.9% slower** |
+| **CLI Exec Overhead (20x `lando php`)** | 11.4s (569ms/call) | 10.3s (514ms/call) | **9.6% faster** ⚡ |
+| **Bind Mount I/O (Read 500 files)** | 9ms | 7ms | **22.2% faster** ⚡ |
+| **HTTP Latency (100 GET requests)** | 0.14s (1.4ms/req) | 0.08s (0.8ms/req) | **43.1% faster** ⚡ |
 
 *Last benchmark run: 2026-11-23 (Kiri v0.2.2)*
 <!-- BENCHMARK_TABLE:END -->
