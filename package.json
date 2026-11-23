@@ -1,15 +1,30 @@
 {
   "name": "@xilonz/lando-engine-kiri",
   "version": "1.0.0",
-  "description": "Lando engine integration and lifecycle management plugin for Kiri container engine",
+  "description": "Make Lando run blazingly fast on the Kiri Engine",
   "main": "index.js",
   "keywords": [
     "lando-plugin",
     "kiri",
     "engine",
-    "container"
+    "docker",
+    "containers"
   ],
   "lando": {},
+  "files": [
+    "index.js",
+    "app.js",
+    "plugin.yml",
+    "tasks",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Xilonz/lando-engine-kiri"
+  },
   "author": "Arjan Steenbergen <arjan@sowmedia.nl>",
   "license": "MIT"
 }
