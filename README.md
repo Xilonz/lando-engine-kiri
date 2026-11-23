@@ -79,35 +79,6 @@ Example output:
 
 ---
 
-## WSL2 Networking Tip
-
-When using WSL2 with `networkingMode=mirrored` on Windows 11 with third-party security suites (such as Bitdefender), closed ports may silently drop TCP SYN packets instead of replying with `TCP RST`, causing port scans to hang for up to 127 seconds.
-
-To avoid this, ensure your `%USERPROFILE%\.wslconfig` (or `/mnt/c/Users/<your-user>/.wslconfig`) contains:
-
-```ini
-[wsl2]
-networkingMode=mirrored
-firewall=false
-
-[experimental]
-firewall=false
-```
-
-Then restart WSL from Windows PowerShell:
-```powershell
-wsl --shutdown
-```
-
----
-
-## Temporary Upstream Notes
-
-* **Absolute Request Targets (`http://localhost/...`)**: In Kiri ≤ 0.2.2, request targets formatted as absolute URIs over the Unix socket are rejected with 400/404. A fix is pending in [libracoder/kiri#758](https://github.com/libracoder/kiri/pull/758). In the meantime, use the standalone companion plugin [`@xilonz/lando-patch-docker-modem`](https://github.com/Xilonz/lando-patch-docker-modem).
-* **Numeric UID / GID=0**: In Kiri ≤ 0.2.2, numeric non-root users (like Bitnami MariaDB `1001`) run without GID 0. This is resolved in Kiri `main` ([#664](https://github.com/libracoder/kiri/commit/399b770c40a62eb2fce0e736f1ec734f3f21dce4)) and will be included in Kiri 0.2.3+.
-
----
-
 ## License
 
 [MIT](LICENSE) © Arjan Steenbergen
