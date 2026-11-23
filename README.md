@@ -2,6 +2,8 @@
 
 [![Lando API 3](https://img.shields.io/badge/lando-v3.x-blue.svg)](https://lando.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- BENCHMARK_BADGES:START -->
+<!-- BENCHMARK_BADGES:END -->
 
 > **Make Lando run blazingly fast on the Kiri Engine.**
 
@@ -107,6 +109,12 @@ Example output:
 ```
 
 ---
+
+<!-- BENCHMARK_TABLE:START -->
+## Performance Benchmarks
+
+*Benchmark will be automatically populated by the GitHub Actions benchmark workflow.*
+<!-- BENCHMARK_TABLE:END -->
 
 ## License
 

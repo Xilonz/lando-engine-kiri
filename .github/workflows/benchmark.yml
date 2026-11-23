@@ -1,0 +1,249 @@
+name: Performance Benchmark (Kiri vs Docker)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Sunday at 02:00 UTC to catch new Kiri/Docker releases automatically
+    - cron: '0 2 * * 0'
+
+permissions:
+  contents: write
+
+jobs:
+  bench-docker:
+    name: Benchmark Docker Engine
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Lando
+        uses: lando/setup-lando@v3
+        with:
+          lando-version: stable
+
+      - name: Prepare test app
+        run: |
+          mkdir -p /tmp/bench-app
+          cd /tmp/bench-app
+          cat << 'EOF' > .lando.yml
+          name: bench-app
+          recipe: wordpress
+          config:
+            webroot: .
+            php: '8.2'
+            database: mariadb
+          services:
+            database:
+              overrides:
+                user: "1001:0"
+          EOF
+          echo "<?php echo 'ok';" > index.php
+
+      - name: Warmup (Pull images and cache layers)
+        run: |
+          cd /tmp/bench-app
+          lando start -y
+          lando destroy -y
+
+      - name: Run Cold Boot Benchmark
+        run: |
+          cd /tmp/bench-app
+          START=$(date +%s%3N)
+          lando start -y
+          END=$(date +%s%3N)
+          BOOT_MS=$((END - START))
+          echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
+          echo "Docker cold boot took ${BOOT_MS} ms"
+
+      - name: Run CLI Exec Benchmark (10 iterations)
+        run: |
+          cd /tmp/bench-app
+          START=$(date +%s%3N)
+          for i in {1..10}; do
+            lando php -r "echo 'ok';" > /dev/null
+          done
+          END=$(date +%s%3N)
+          EXEC_MS=$((END - START))
+          echo "EXEC_MS=$EXEC_MS" >> $GITHUB_ENV
+          echo "Docker 10x CLI exec took ${EXEC_MS} ms"
+
+      - name: Teardown test app
+        run: |
+          cd /tmp/bench-app
+          lando destroy -y
+
+      - name: Save Docker Metrics
+        run: |
+          mkdir -p results
+          cat << EOF > results/docker.json
+          {
+            "engine": "docker",
+            "cold_boot_ms": ${{ env.BOOT_MS }},
+            "cli_exec_ms": ${{ env.EXEC_MS }},
+            "cli_runs": 10
+          }
+          EOF
+
+      - name: Upload Docker Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-result
+          path: results/docker.json
+
+  bench-kiri:
+    name: Benchmark Kiri Engine
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Lando
+        uses: lando/setup-lando@v3
+        with:
+          lando-version: stable
+
+      - name: Fetch and Install Latest Kiri
+        run: |
+          KIRI_VERSION=$(curl -s https://download.runkiri.com/latest.json | jq -r .version)
+          echo "Latest Kiri version: $KIRI_VERSION"
+          echo "KIRI_VERSION=$KIRI_VERSION" >> $GITHUB_ENV
+          curl -fsSL "https://download.runkiri.com/kiri_${KIRI_VERSION}_amd64.deb" -o /tmp/kiri.deb
+          sudo dpkg -i /tmp/kiri.deb || sudo apt-get install -f -y
+
+      - name: Stop Docker & Start Kiri Daemon
+        run: |
+          sudo systemctl stop docker docker.socket containerd || true
+          sudo systemctl enable kiri
+          sudo systemctl start kiri
+          
+          # Wait for Kiri socket
+          for i in {1..30}; do
+            if [ -S /run/kiri/docker.sock ]; then
+              echo "Kiri socket ready!"
+              break
+            fi
+            sleep 0.2
+          done
+          
+          sudo ln -sf /run/kiri/docker.sock /var/run/docker.sock
+          sudo chmod 666 /run/kiri/docker.sock /var/run/docker.sock || true
+          sudo usermod -aG kiri runner || true
+
+      - name: Install Lando Kiri Plugins
+        run: |
+          mkdir -p ~/.lando/plugins
+          # Link current repo as lando-engine-kiri
+          ln -s "$GITHUB_WORKSPACE" ~/.lando/plugins/lando-engine-kiri
+          # Install companion docker-modem patch plugin
+          lando plugin-add @xilonz/lando-patch-docker-modem
+          lando --clear
+          lando kiri-doctor
+
+      - name: Prepare test app
+        run: |
+          mkdir -p /tmp/bench-app
+          cd /tmp/bench-app
+          cat << 'EOF' > .lando.yml
+          name: bench-app
+          recipe: wordpress
+          config:
+            webroot: .
+            php: '8.2'
+            database: mariadb
+          services:
+            database:
+              overrides:
+                user: "1001:0"
+          EOF
+          echo "<?php echo 'ok';" > index.php
+
+      - name: Warmup (Pull images and cache layers)
+        run: |
+          cd /tmp/bench-app
+          lando start -y
+          lando destroy -y
+
+      - name: Run Cold Boot Benchmark
+        run: |
+          cd /tmp/bench-app
+          START=$(date +%s%3N)
+          lando start -y
+          END=$(date +%s%3N)
+          BOOT_MS=$((END - START))
+          echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
+          echo "Kiri cold boot took ${BOOT_MS} ms"
+
+      - name: Run CLI Exec Benchmark (10 iterations)
+        run: |
+          cd /tmp/bench-app
+          START=$(date +%s%3N)
+          for i in {1..10}; do
+            lando php -r "echo 'ok';" > /dev/null
+          done
+          END=$(date +%s%3N)
+          EXEC_MS=$((END - START))
+          echo "EXEC_MS=$EXEC_MS" >> $GITHUB_ENV
+          echo "Kiri 10x CLI exec took ${EXEC_MS} ms"
+
+      - name: Teardown test app
+        run: |
+          cd /tmp/bench-app
+          lando destroy -y
+
+      - name: Save Kiri Metrics
+        run: |
+          mkdir -p results
+          cat << EOF > results/kiri.json
+          {
+            "engine": "kiri",
+            "kiri_version": "${{ env.KIRI_VERSION }}",
+            "cold_boot_ms": ${{ env.BOOT_MS }},
+            "cli_exec_ms": ${{ env.EXEC_MS }},
+            "cli_runs": 10
+          }
+          EOF
+
+      - name: Upload Kiri Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiri-result
+          path: results/kiri.json
+
+  report:
+    name: Compare & Update README
+    needs: [bench-docker, bench-kiri]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Docker result
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-result
+          path: results
+
+      - name: Download Kiri result
+        uses: actions/download-artifact@v4
+        with:
+          name: kiri-result
+          path: results
+
+      - name: Process Results & Update README
+        run: node scripts/benchmark-reporter.js
+
+      - name: Commit and push updated README
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
+          if ! git diff --quiet README.md; then
+            git add README.md
+            git commit -m "chore(benchmark): update benchmark results & shields in README [skip ci]"
+            git push origin main
+          else
+            echo "No changes in README.md"
+          fi
