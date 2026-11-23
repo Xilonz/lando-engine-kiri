@@ -3,6 +3,8 @@
 [![Lando API 3](https://img.shields.io/badge/lando-v3.x-blue.svg)](https://lando.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 <!-- BENCHMARK_BADGES:START -->
+[![Cold Boot](https://img.shields.io/badge/Cold%20Boot-450.7%25%20slower-orange?style=flat-square)](#performance-benchmarks)
+[![CLI Overhead](https://img.shields.io/badge/CLI%20Exec-2.1%25%20slower-orange?style=flat-square)](#performance-benchmarks)
 <!-- BENCHMARK_BADGES:END -->
 
 > **Make Lando run blazingly fast on the Kiri Engine.**
@@ -113,7 +115,15 @@ Example output:
 <!-- BENCHMARK_TABLE:START -->
 ## Performance Benchmarks
 
-*Benchmark will be automatically populated by the GitHub Actions benchmark workflow.*
+> Automated benchmark executed on GitHub Actions runner (`ubuntu-latest`, 2 vCPU, 7GB RAM).  
+> Stack: WordPress recipe (Nginx, PHP 8.2-FPM, MariaDB).
+
+| Metric | Docker Engine | Kiri Engine | Difference |
+| :--- | :--- | :--- | :--- |
+| **Cold Boot (`lando start`)** | 13.5s | 74.4s | **450.7% slower** |
+| **CLI Exec Overhead (10x `lando php`)** | 3.6s (359ms/call) | 3.7s (367ms/call) | **2.1% slower** |
+
+*Last benchmark run: 2026-11-23 (Kiri v0.2.2)*
 <!-- BENCHMARK_TABLE:END -->
 
 ## License
