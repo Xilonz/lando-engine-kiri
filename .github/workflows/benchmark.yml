@@ -2,6 +2,12 @@ name: Performance Benchmark (Kiri vs Docker)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/benchmark.yml'
+      - 'scripts/**'
   schedule:
     # Run weekly on Sunday at 02:00 UTC to catch new Kiri/Docker releases automatically
     - cron: '0 2 * * 0'
