@@ -22,6 +22,9 @@ jobs:
         with:
           lando-version: stable
 
+      - name: Ensure ports 80 and 443 are free
+        run: sudo systemctl stop nginx apache2 || true
+
       - name: Prepare test app
         run: |
           mkdir -p /tmp/bench-app
@@ -126,8 +129,11 @@ jobs:
             sleep 0.2
           done
           
+          # Clean up any stale docker socket and symlink to Kiri
+          sudo rm -f /var/run/docker.sock /run/docker.sock
           sudo ln -sf /run/kiri/docker.sock /var/run/docker.sock
-          sudo chmod 666 /run/kiri/docker.sock /var/run/docker.sock || true
+          sudo ln -sf /run/kiri/docker.sock /run/docker.sock
+          sudo chmod 666 /run/kiri/docker.sock /var/run/docker.sock /run/docker.sock || true
           sudo usermod -aG kiri runner || true
 
       - name: Install Lando Kiri Plugins
@@ -135,10 +141,13 @@ jobs:
           mkdir -p ~/.lando/plugins
           # Link current repo as lando-engine-kiri
           ln -s "$GITHUB_WORKSPACE" ~/.lando/plugins/lando-engine-kiri
-          # Install companion docker-modem patch plugin
-          lando plugin-add @xilonz/lando-patch-docker-modem
+          # Clone companion docker-modem patch plugin directly into ~/.lando/plugins
+          git clone https://github.com/Xilonz/lando-patch-docker-modem.git ~/.lando/plugins/lando-patch-docker-modem
           lando --clear
           lando kiri-doctor
+
+      - name: Ensure ports 80 and 443 are free
+        run: sudo systemctl stop nginx apache2 || true
 
       - name: Prepare test app
         run: |
