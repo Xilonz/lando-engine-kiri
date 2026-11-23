@@ -44,10 +44,6 @@ jobs:
             composer_version: false
             database: mariadb:10.11
           services:
-            appserver:
-              overrides:
-                ports:
-                  - "8080:80"
             database:
               overrides:
                 user: "1001:0"
@@ -110,17 +106,19 @@ jobs:
       - name: Run HTTP Latency Benchmark (100 GET requests)
         run: |
           cd /tmp/bench-app
+          APP_URL=$(lando info --format json | jq -r '.[].urls[]? | select(startswith("http://localhost:"))' | head -n 1)
+          echo "Discovered app URL: $APP_URL"
           for i in {1..30}; do
-            if curl -s http://127.0.0.1:8080 | grep -q 'ok'; then
+            if curl -s "$APP_URL" | grep -q 'ok'; then
               echo "HTTP server ready!"
               break
             fi
             sleep 0.5
           done
-          RAW_HTTP=$(node $GITHUB_WORKSPACE/scripts/bench-http.js http://127.0.0.1:8080/ 100)
+          RAW_HTTP=$(node $GITHUB_WORKSPACE/scripts/bench-http.js "$APP_URL" 100)
           HTTP_MS=$(echo "$RAW_HTTP" | tail -n 1 | tr -dc '0-9')
           echo "HTTP_MS=${HTTP_MS:-0}" >> $GITHUB_ENV
-          echo "Docker 100 HTTP requests took ${HTTP_MS:-0} ms"
+          echo "100 HTTP GET requests took ${HTTP_MS:-0} ms"
 
       - name: Teardown test app
         run: |
@@ -223,10 +221,6 @@ jobs:
             composer_version: false
             database: mariadb:10.11
           services:
-            appserver:
-              overrides:
-                ports:
-                  - "8080:80"
             database:
               overrides:
                 user: "1001:0"
@@ -289,17 +283,19 @@ jobs:
       - name: Run HTTP Latency Benchmark (100 GET requests)
         run: |
           cd /tmp/bench-app
+          APP_URL=$(lando info --format json | jq -r '.[].urls[]? | select(startswith("http://localhost:"))' | head -n 1)
+          echo "Discovered app URL: $APP_URL"
           for i in {1..30}; do
-            if curl -s http://127.0.0.1:8080 | grep -q 'ok'; then
+            if curl -s "$APP_URL" | grep -q 'ok'; then
               echo "HTTP server ready!"
               break
             fi
             sleep 0.5
           done
-          RAW_HTTP=$(node $GITHUB_WORKSPACE/scripts/bench-http.js http://127.0.0.1:8080/ 100)
+          RAW_HTTP=$(node $GITHUB_WORKSPACE/scripts/bench-http.js "$APP_URL" 100)
           HTTP_MS=$(echo "$RAW_HTTP" | tail -n 1 | tr -dc '0-9')
           echo "HTTP_MS=${HTTP_MS:-0}" >> $GITHUB_ENV
-          echo "Kiri 100 HTTP requests took ${HTTP_MS:-0} ms"
+          echo "100 HTTP GET requests took ${HTTP_MS:-0} ms"
 
       - name: Teardown test app
         run: |
