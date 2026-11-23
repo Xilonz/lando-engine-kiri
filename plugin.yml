@@ -1,0 +1,4 @@
+name: "@xilonz/lando-engine-kiri"
+api: 3
+tasks:
+  kiri-doctor: ./tasks/kiri-doctor.js

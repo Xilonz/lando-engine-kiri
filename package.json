@@ -1,0 +1,15 @@
+{
+  "name": "@xilonz/lando-engine-kiri",
+  "version": "1.0.0",
+  "description": "Lando engine integration and lifecycle management plugin for Kiri container engine",
+  "main": "index.js",
+  "keywords": [
+    "lando-plugin",
+    "kiri",
+    "engine",
+    "container"
+  ],
+  "lando": {},
+  "author": "Arjan Steenbergen <arjan@sowmedia.nl>",
+  "license": "MIT"
+}
