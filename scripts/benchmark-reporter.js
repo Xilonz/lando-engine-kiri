@@ -51,7 +51,7 @@ const tableMarkdown = `<!-- BENCHMARK_TABLE:START -->
 ## Performance Benchmarks
 
 > Automated benchmark executed on GitHub Actions runner (\`ubuntu-latest\`, 2 vCPU, 7GB RAM).  
-> Stack: WordPress recipe (Nginx, PHP 8.2-FPM, MariaDB).
+> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11 — pure container boot, zero downloads).
 
 | Metric | Docker Engine | Kiri Engine | Difference |
 | :--- | :--- | :--- | :--- |

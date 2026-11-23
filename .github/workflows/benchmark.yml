@@ -31,11 +31,12 @@ jobs:
           cd /tmp/bench-app
           cat << 'EOF' > .lando.yml
           name: bench-app
-          recipe: wordpress
+          recipe: lamp
           config:
             webroot: .
             php: '8.2'
-            database: mariadb
+            composer_version: false
+            database: mariadb:10.11
           services:
             database:
               overrides:
@@ -117,6 +118,13 @@ jobs:
       - name: Stop Docker & Start Kiri Daemon
         run: |
           sudo systemctl stop docker docker.socket containerd || true
+
+          # Fix Kiri Issue #247 on Linux: When Docker stops, iptables FORWARD policy remains DROP.
+          # Enable IP forwarding and NAT MASQUERADE so Kiri containers have outbound internet connectivity.
+          sudo sysctl -w net.ipv4.ip_forward=1
+          sudo iptables -P FORWARD ACCEPT
+          sudo iptables -t nat -A POSTROUTING -j MASQUERADE
+
           sudo systemctl enable kiri
           sudo systemctl start kiri
           
@@ -145,6 +153,8 @@ jobs:
           git clone https://github.com/Xilonz/lando-patch-docker-modem.git ~/.lando/plugins/lando-patch-docker-modem
           lando --clear
           lando kiri-doctor
+          # Verify container outbound connectivity
+          docker run --rm alpine ping -c 1 1.1.1.1 || true
 
       - name: Ensure ports 80 and 443 are free
         run: sudo systemctl stop nginx apache2 || true
@@ -155,11 +165,12 @@ jobs:
           cd /tmp/bench-app
           cat << 'EOF' > .lando.yml
           name: bench-app
-          recipe: wordpress
+          recipe: lamp
           config:
             webroot: .
             php: '8.2'
-            database: mariadb
+            composer_version: false
+            database: mariadb:10.11
           services:
             database:
               overrides:
