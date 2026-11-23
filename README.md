@@ -130,6 +130,44 @@ Example output:
 | **Teardown (10x avg `lando destroy`)** | 1.5s | 1.5s | **2.7% slower** |
 
 *Last benchmark run: 2026-11-23 (Kiri v0.2.2)*
+
+> [!NOTE]
+> **Linux CI vs. Desktop Environments (macOS & Windows):**  
+> These automated benchmarks run on GitHub Actions (`ubuntu-latest`) where Docker Engine runs natively directly on the Linux kernel without any virtualization VM layer.  
+> 
+> The dramatic performance gains highlighted on [runkiri.com/benchmarks/](https://runkiri.com/benchmarks/) (such as 3–10× faster build/exec times and massive CPU/RAM savings) are observed when comparing Kiri against **Docker Desktop on macOS and Windows**. In desktop environments, Docker Desktop runs inside a heavy virtual machine with significant VirtioFS/gRPC-FUSE filesystem translation and socket virtualization overhead. Because GitHub-hosted runners cannot run interactive Docker Desktop GUI applications headlessly in CI, we cannot automate those desktop benchmarks here.
+
+### How to Benchmark on Your Own Machine
+
+Want to measure the real-world difference on your own setup (especially on macOS or Windows)? Run these quick tests:
+
+1. **CLI Exec Overhead (20 iterations):**
+   ```bash
+   # Compare how fast Lando processes and runs CLI commands:
+   time for i in {1..20}; do lando php -r "echo 'ok';"; done
+   ```
+
+2. **Warm Restart Time:**
+   ```bash
+   time lando restart -y
+   ```
+
+3. **Bind Mount Filesystem I/O (File reading speed):**
+   ```bash
+   # Measure how fast PHP reads files mounted from your host filesystem:
+   lando php -r '
+     $start = microtime(true);
+     $files = glob("vendor/**/*.php"); // or any project directory with many files
+     $bytes = 0;
+     foreach ($files as $f) { $bytes += strlen(file_get_contents($f)); }
+     echo "Read " . count($files) . " files in " . round((microtime(true) - $start) * 1000) . " ms\n";
+   '
+   ```
+
+4. **Kiri Built-in Engine Benchmark:**
+   ```bash
+   kiri bench
+   ```
 <!-- BENCHMARK_TABLE:END -->
 
 ## License

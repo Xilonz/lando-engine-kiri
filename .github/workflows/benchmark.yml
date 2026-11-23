@@ -31,6 +31,11 @@ jobs:
       - name: Ensure ports 80 and 443 are free
         run: sudo systemctl stop nginx apache2 || true
 
+      - name: Verify Docker Engine Version
+        run: |
+          docker version
+          docker info
+
       - name: Prepare test app
         run: |
           mkdir -p /tmp/bench-app/fixtures
@@ -253,6 +258,11 @@ jobs:
 
       - name: Ensure ports 80 and 443 are free
         run: sudo systemctl stop nginx apache2 || true
+
+      - name: Verify Kiri Engine Version
+        run: |
+          docker version
+          kiri --version || true
 
       - name: Prepare test app
         run: |
