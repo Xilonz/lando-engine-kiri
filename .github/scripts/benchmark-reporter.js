@@ -31,24 +31,25 @@ const kiriVer = kiri.kiri_version ? `v${kiri.kiri_version}` : 'latest';
 const tableRows = [];
 const badges = [];
 
-// 1. Cold boot
+// 1. Cold start (10x avg)
 if (docker.cold_boot_ms && kiri.cold_boot_ms) {
   const comp = calcComparison(docker.cold_boot_ms, kiri.cold_boot_ms);
-  tableRows.push(`| **Cold Boot (Pull & First Start)** | ${(docker.cold_boot_ms / 1000).toFixed(1)}s | ${(kiri.cold_boot_ms / 1000).toFixed(1)}s | ${comp.text} |`);
-  badges.push(`[![Cold Boot](https://img.shields.io/badge/Cold%20Boot-${comp.pct}%25%20${comp.isFaster ? 'faster' : 'slower'}-${comp.color}?style=flat-square)](#performance-benchmarks)`);
+  const runs = kiri.boot_runs || 10;
+  tableRows.push(`| **Cold Start (${runs}x avg \`lando start\` from scratch)** | ${(docker.cold_boot_ms / 1000).toFixed(1)}s | ${(kiri.cold_boot_ms / 1000).toFixed(1)}s | ${comp.text} |`);
+  badges.push(`[![Cold Start](https://img.shields.io/badge/Cold%20Start-${comp.pct}%25%20${comp.isFaster ? 'faster' : 'slower'}-${comp.color}?style=flat-square)](#performance-benchmarks)`);
 }
 
-// 2. Warm restart (averaged over multiple runs)
+// 2. Warm restart (10x avg)
 if (docker.warm_restart_ms && kiri.warm_restart_ms) {
   const comp = calcComparison(docker.warm_restart_ms, kiri.warm_restart_ms);
-  const runs = kiri.warm_runs || 3;
+  const runs = kiri.warm_runs || 10;
   const dockerAvg = (docker.warm_restart_ms / 1000).toFixed(1);
   const kiriAvg = (kiri.warm_restart_ms / 1000).toFixed(1);
   tableRows.push(`| **Warm Restart (${runs}x avg \`lando restart\`)** | ${dockerAvg}s | ${kiriAvg}s | ${comp.text} |`);
   badges.push(`[![Warm Restart](https://img.shields.io/badge/Warm%20Restart-${comp.pct}%25%20${comp.isFaster ? 'faster' : 'slower'}-${comp.color}?style=flat-square)](#performance-benchmarks)`);
 }
 
-// 3. CLI exec (100 runs)
+// 3. CLI exec (100x)
 if (docker.cli_exec_ms && kiri.cli_exec_ms) {
   const comp = calcComparison(docker.cli_exec_ms, kiri.cli_exec_ms);
   const runs = kiri.cli_runs || 100;
@@ -58,14 +59,15 @@ if (docker.cli_exec_ms && kiri.cli_exec_ms) {
   badges.push(`[![CLI Overhead](https://img.shields.io/badge/CLI%20Exec-${comp.pct}%25%20${comp.isFaster ? 'faster' : 'slower'}-${comp.color}?style=flat-square)](#performance-benchmarks)`);
 }
 
-// 4. Bind mount I/O
+// 4. Bind mount I/O (10 passes avg)
 if (docker.io_read_ms && kiri.io_read_ms) {
   const comp = calcComparison(docker.io_read_ms, kiri.io_read_ms);
   const files = kiri.io_files || 1000;
-  tableRows.push(`| **Bind Mount I/O (Read ${files} files)** | ${docker.io_read_ms}ms | ${kiri.io_read_ms}ms | ${comp.text} |`);
+  const passes = kiri.io_passes || 10;
+  tableRows.push(`| **Bind Mount I/O (${passes}x avg reading ${files} files)** | ${docker.io_read_ms}ms | ${kiri.io_read_ms}ms | ${comp.text} |`);
 }
 
-// 5. HTTP Latency
+// 5. HTTP Latency (250 requests)
 if (docker.http_ms && kiri.http_ms) {
   const comp = calcComparison(docker.http_ms, kiri.http_ms);
   const reqs = kiri.http_requests || 250;
@@ -74,10 +76,11 @@ if (docker.http_ms && kiri.http_ms) {
   tableRows.push(`| **HTTP Latency (${reqs} GET requests)** | ${(docker.http_ms / 1000).toFixed(2)}s (${dockerAvgReq}ms/req) | ${(kiri.http_ms / 1000).toFixed(2)}s (${kiriAvgReq}ms/req) | ${comp.text} |`);
 }
 
-// 6. Destroy
+// 6. Teardown (10x avg)
 if (docker.destroy_ms && kiri.destroy_ms) {
   const comp = calcComparison(docker.destroy_ms, kiri.destroy_ms);
-  tableRows.push(`| **Teardown (\`lando destroy\`)** | ${(docker.destroy_ms / 1000).toFixed(1)}s | ${(kiri.destroy_ms / 1000).toFixed(1)}s | ${comp.text} |`);
+  const runs = kiri.destroy_runs || 10;
+  tableRows.push(`| **Teardown (${runs}x avg \`lando destroy\`)** | ${(docker.destroy_ms / 1000).toFixed(1)}s | ${(kiri.destroy_ms / 1000).toFixed(1)}s | ${comp.text} |`);
 }
 
 const badgesMarkdown = `<!-- BENCHMARK_BADGES:START -->
@@ -88,7 +91,8 @@ const tableMarkdown = `<!-- BENCHMARK_TABLE:START -->
 ## Performance Benchmarks
 
 > Automated benchmark executed on GitHub Actions runner (\`ubuntu-latest\`, 2 vCPU, 7GB RAM).  
-> Stack: Lightweight Alpine L337 container (\`php:8.2-cli-alpine\`, ~28 MB, built-in server).
+> Stack: Lightweight Alpine L337 container (\`php:8.2-cli-alpine\`, ~28 MB, built-in server).  
+> All benchmarks run a minimum of 10 iterations to eliminate noise and scheduler variance.
 
 | Metric | Docker Engine | Kiri Engine | Difference |
 | :--- | :--- | :--- | :--- |

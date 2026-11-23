@@ -59,29 +59,43 @@ jobs:
             echo "<?php return 'fixture_data_$i';" > fixtures/file_$i.php
           done
 
-      - name: Run Cold Boot Benchmark (Pull & Start from scratch)
+      - name: Run Cold Start & Teardown Benchmark (10 iterations averaged)
         run: |
           cd /tmp/bench-app
-          START=$(date +%s%3N)
-          lando start -y
-          END=$(date +%s%3N)
-          BOOT_MS=$((END - START))
-          echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
-          echo "Docker cold boot took ${BOOT_MS} ms"
+          BOOT_TOTAL=0
+          DESTROY_TOTAL=0
+          for i in {1..10}; do
+            S=$(date +%s%3N)
+            lando start -y
+            E=$(date +%s%3N)
+            BOOT_TOTAL=$((BOOT_TOTAL + E - S))
 
-      - name: Run Warm Restart Benchmark (3 iterations averaged)
+            # Keep container running on the 10th iteration for subsequent tests
+            if [ $i -lt 10 ]; then
+              S=$(date +%s%3N)
+              lando destroy -y
+              E=$(date +%s%3N)
+              DESTROY_TOTAL=$((DESTROY_TOTAL + E - S))
+            fi
+          done
+          BOOT_MS=$((BOOT_TOTAL / 10))
+          echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
+          echo "DESTROY_TOTAL=$DESTROY_TOTAL" >> $GITHUB_ENV
+          echo "Docker 10x avg cold start took ${BOOT_MS} ms"
+
+      - name: Run Warm Restart Benchmark (10 iterations averaged)
         run: |
           cd /tmp/bench-app
           WARM_TOTAL=0
-          for i in {1..3}; do
+          for i in {1..10}; do
             S=$(date +%s%3N)
             lando restart -y
             E=$(date +%s%3N)
             WARM_TOTAL=$((WARM_TOTAL + E - S))
           done
-          WARM_MS=$((WARM_TOTAL / 3))
+          WARM_MS=$((WARM_TOTAL / 10))
           echo "WARM_MS=$WARM_MS" >> $GITHUB_ENV
-          echo "Docker 3x avg warm restart took ${WARM_MS} ms"
+          echo "Docker 10x avg warm restart took ${WARM_MS} ms"
 
       - name: Run CLI Exec Benchmark (100 iterations)
         run: |
@@ -95,12 +109,12 @@ jobs:
           echo "EXEC_MS=$EXEC_MS" >> $GITHUB_ENV
           echo "Docker 100x CLI exec took ${EXEC_MS} ms"
 
-      - name: Run Bind Mount Filesystem I/O Benchmark (1,000 files, 3 passes averaged)
+      - name: Run Bind Mount Filesystem I/O Benchmark (1,000 files, 10 passes averaged)
         run: |
           cd /tmp/bench-app
           RAW_IO=$(lando php -r '
             $totalTime = 0;
-            for ($p = 0; $p < 3; $p++) {
+            for ($p = 0; $p < 10; $p++) {
               $t = microtime(true);
               $files = glob("fixtures/*.php");
               $sum = 0;
@@ -109,11 +123,11 @@ jobs:
               }
               $totalTime += (microtime(true) - $t);
             }
-            echo round(($totalTime / 3) * 1000);
+            echo round(($totalTime / 10) * 1000);
           ')
           IO_MS=$(echo "$RAW_IO" | tail -n 1 | tr -dc '0-9')
           echo "IO_MS=${IO_MS:-0}" >> $GITHUB_ENV
-          echo "Docker bind mount I/O took ${IO_MS:-0} ms"
+          echo "Docker bind mount I/O (10 passes avg) took ${IO_MS:-0} ms"
 
       - name: Run HTTP Latency Benchmark (250 GET requests)
         run: |
@@ -132,15 +146,16 @@ jobs:
           echo "HTTP_MS=${HTTP_MS:-0}" >> $GITHUB_ENV
           echo "Docker 250 HTTP requests took ${HTTP_MS:-0} ms"
 
-      - name: Benchmark Teardown (lando destroy)
+      - name: Benchmark Teardown (10th destroy & average calculation)
         run: |
           cd /tmp/bench-app
-          START=$(date +%s%3N)
+          S=$(date +%s%3N)
           lando destroy -y
-          END=$(date +%s%3N)
-          DESTROY_MS=$((END - START))
+          E=$(date +%s%3N)
+          FULL_DESTROY=$(( ${{ env.DESTROY_TOTAL }} + E - S ))
+          DESTROY_MS=$(( FULL_DESTROY / 10 ))
           echo "DESTROY_MS=$DESTROY_MS" >> $GITHUB_ENV
-          echo "Docker teardown took ${DESTROY_MS} ms"
+          echo "Docker 10x avg teardown took ${DESTROY_MS} ms"
 
       - name: Save Docker Metrics
         run: |
@@ -149,15 +164,18 @@ jobs:
           {
             "engine": "docker",
             "cold_boot_ms": ${{ env.BOOT_MS }},
+            "boot_runs": 10,
             "warm_restart_ms": ${{ env.WARM_MS }},
-            "warm_runs": 3,
+            "warm_runs": 10,
             "cli_exec_ms": ${{ env.EXEC_MS }},
             "cli_runs": 100,
             "io_read_ms": ${{ env.IO_MS }},
             "io_files": 1000,
+            "io_passes": 10,
             "http_ms": ${{ env.HTTP_MS }},
             "http_requests": 250,
-            "destroy_ms": ${{ env.DESTROY_MS }}
+            "destroy_ms": ${{ env.DESTROY_MS }},
+            "destroy_runs": 10
           }
           EOF
 
@@ -194,6 +212,15 @@ jobs:
           # Ensure packet forwarding is allowed
           sudo sysctl -w net.ipv4.ip_forward=1
           sudo iptables -P FORWARD ACCEPT
+
+          # Move Kiri domain router away from ports 80/443 so Lando's Traefik has exclusive access
+          sudo mkdir -p /etc/systemd/system/kiri.service.d
+          cat << 'EOF' | sudo tee /etc/systemd/system/kiri.service.d/ports.conf
+          [Service]
+          Environment=KIRI_HTTP_PORT=8880
+          Environment=KIRI_HTTPS_PORT=8843
+          EOF
+          sudo systemctl daemon-reload
 
           sudo systemctl enable kiri
           sudo systemctl start kiri
@@ -255,29 +282,43 @@ jobs:
             echo "<?php return 'fixture_data_$i';" > fixtures/file_$i.php
           done
 
-      - name: Run Cold Boot Benchmark (Pull & Start from scratch)
+      - name: Run Cold Start & Teardown Benchmark (10 iterations averaged)
         run: |
           cd /tmp/bench-app
-          START=$(date +%s%3N)
-          lando start -y
-          END=$(date +%s%3N)
-          BOOT_MS=$((END - START))
-          echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
-          echo "Kiri cold boot took ${BOOT_MS} ms"
+          BOOT_TOTAL=0
+          DESTROY_TOTAL=0
+          for i in {1..10}; do
+            S=$(date +%s%3N)
+            lando start -y
+            E=$(date +%s%3N)
+            BOOT_TOTAL=$((BOOT_TOTAL + E - S))
 
-      - name: Run Warm Restart Benchmark (3 iterations averaged)
+            # Keep container running on the 10th iteration for subsequent tests
+            if [ $i -lt 10 ]; then
+              S=$(date +%s%3N)
+              lando destroy -y
+              E=$(date +%s%3N)
+              DESTROY_TOTAL=$((DESTROY_TOTAL + E - S))
+            fi
+          done
+          BOOT_MS=$((BOOT_TOTAL / 10))
+          echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
+          echo "DESTROY_TOTAL=$DESTROY_TOTAL" >> $GITHUB_ENV
+          echo "Kiri 10x avg cold start took ${BOOT_MS} ms"
+
+      - name: Run Warm Restart Benchmark (10 iterations averaged)
         run: |
           cd /tmp/bench-app
           WARM_TOTAL=0
-          for i in {1..3}; do
+          for i in {1..10}; do
             S=$(date +%s%3N)
             lando restart -y
             E=$(date +%s%3N)
             WARM_TOTAL=$((WARM_TOTAL + E - S))
           done
-          WARM_MS=$((WARM_TOTAL / 3))
+          WARM_MS=$((WARM_TOTAL / 10))
           echo "WARM_MS=$WARM_MS" >> $GITHUB_ENV
-          echo "Kiri 3x avg warm restart took ${WARM_MS} ms"
+          echo "Kiri 10x avg warm restart took ${WARM_MS} ms"
 
       - name: Run CLI Exec Benchmark (100 iterations)
         run: |
@@ -291,12 +332,12 @@ jobs:
           echo "EXEC_MS=$EXEC_MS" >> $GITHUB_ENV
           echo "Kiri 100x CLI exec took ${EXEC_MS} ms"
 
-      - name: Run Bind Mount Filesystem I/O Benchmark (1,000 files, 3 passes averaged)
+      - name: Run Bind Mount Filesystem I/O Benchmark (1,000 files, 10 passes averaged)
         run: |
           cd /tmp/bench-app
           RAW_IO=$(lando php -r '
             $totalTime = 0;
-            for ($p = 0; $p < 3; $p++) {
+            for ($p = 0; $p < 10; $p++) {
               $t = microtime(true);
               $files = glob("fixtures/*.php");
               $sum = 0;
@@ -305,11 +346,11 @@ jobs:
               }
               $totalTime += (microtime(true) - $t);
             }
-            echo round(($totalTime / 3) * 1000);
+            echo round(($totalTime / 10) * 1000);
           ')
           IO_MS=$(echo "$RAW_IO" | tail -n 1 | tr -dc '0-9')
           echo "IO_MS=${IO_MS:-0}" >> $GITHUB_ENV
-          echo "Kiri bind mount I/O took ${IO_MS:-0} ms"
+          echo "Kiri bind mount I/O (10 passes avg) took ${IO_MS:-0} ms"
 
       - name: Run HTTP Latency Benchmark (250 GET requests)
         run: |
@@ -328,15 +369,16 @@ jobs:
           echo "HTTP_MS=${HTTP_MS:-0}" >> $GITHUB_ENV
           echo "Kiri 250 HTTP requests took ${HTTP_MS:-0} ms"
 
-      - name: Benchmark Teardown (lando destroy)
+      - name: Benchmark Teardown (10th destroy & average calculation)
         run: |
           cd /tmp/bench-app
-          START=$(date +%s%3N)
+          S=$(date +%s%3N)
           lando destroy -y
-          END=$(date +%s%3N)
-          DESTROY_MS=$((END - START))
+          E=$(date +%s%3N)
+          FULL_DESTROY=$(( ${{ env.DESTROY_TOTAL }} + E - S ))
+          DESTROY_MS=$(( FULL_DESTROY / 10 ))
           echo "DESTROY_MS=$DESTROY_MS" >> $GITHUB_ENV
-          echo "Kiri teardown took ${DESTROY_MS} ms"
+          echo "Kiri 10x avg teardown took ${DESTROY_MS} ms"
 
       - name: Save Kiri Metrics
         run: |
@@ -346,15 +388,18 @@ jobs:
             "engine": "kiri",
             "kiri_version": "${{ env.KIRI_VERSION }}",
             "cold_boot_ms": ${{ env.BOOT_MS }},
+            "boot_runs": 10,
             "warm_restart_ms": ${{ env.WARM_MS }},
-            "warm_runs": 3,
+            "warm_runs": 10,
             "cli_exec_ms": ${{ env.EXEC_MS }},
             "cli_runs": 100,
             "io_read_ms": ${{ env.IO_MS }},
             "io_files": 1000,
+            "io_passes": 10,
             "http_ms": ${{ env.HTTP_MS }},
             "http_requests": 250,
-            "destroy_ms": ${{ env.DESTROY_MS }}
+            "destroy_ms": ${{ env.DESTROY_MS }},
+            "destroy_runs": 10
           }
           EOF
 
