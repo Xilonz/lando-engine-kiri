@@ -1,6 +1,6 @@
 {
   "name": "@xilonz/lando-engine-kiri",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Make Lando run blazingly fast on the Kiri Engine",
   "main": "index.js",
   "keywords": [
