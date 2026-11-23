@@ -22,12 +22,12 @@ jobs:
         with:
           lando-version: stable
 
-      - name: Ensure ports 80 and 443 are free
+      - name: Ensure ports 80, 443 and 8080 are free
         run: sudo systemctl stop nginx apache2 || true
 
       - name: Prepare test app
         run: |
-          mkdir -p /tmp/bench-app
+          mkdir -p /tmp/bench-app/fixtures
           cd /tmp/bench-app
           cat << 'EOF' > .lando.yml
           name: bench-app
@@ -38,11 +38,20 @@ jobs:
             composer_version: false
             database: mariadb:10.11
           services:
+            appserver:
+              overrides:
+                ports:
+                  - "8080:80"
             database:
               overrides:
                 user: "1001:0"
           EOF
           echo "<?php echo 'ok';" > index.php
+
+          # Create 500 fixture PHP files to measure bind mount I/O performance
+          for i in {1..500}; do
+            echo "<?php return 'fixture_data_$i';" > fixtures/file_$i.php
+          done
 
       - name: Run Cold Boot Benchmark (Pull & Start from scratch)
         run: |
@@ -54,17 +63,58 @@ jobs:
           echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
           echo "Docker cold boot took ${BOOT_MS} ms"
 
-      - name: Run CLI Exec Benchmark (10 iterations)
+      - name: Run Warm Restart Benchmark (lando restart)
         run: |
           cd /tmp/bench-app
           START=$(date +%s%3N)
-          for i in {1..10}; do
+          lando restart -y
+          END=$(date +%s%3N)
+          WARM_MS=$((END - START))
+          echo "WARM_MS=$WARM_MS" >> $GITHUB_ENV
+          echo "Docker warm restart took ${WARM_MS} ms"
+
+      - name: Run CLI Exec Benchmark (20 iterations)
+        run: |
+          cd /tmp/bench-app
+          START=$(date +%s%3N)
+          for i in {1..20}; do
             lando php -r "echo 'ok';" > /dev/null
           done
           END=$(date +%s%3N)
           EXEC_MS=$((END - START))
           echo "EXEC_MS=$EXEC_MS" >> $GITHUB_ENV
-          echo "Docker 10x CLI exec took ${EXEC_MS} ms"
+          echo "Docker 20x CLI exec took ${EXEC_MS} ms"
+
+      - name: Run Bind Mount Filesystem I/O Benchmark (500 files)
+        run: |
+          cd /tmp/bench-app
+          RAW_IO=$(lando php -r '
+            $t = microtime(true);
+            $files = glob("fixtures/*.php");
+            $total = 0;
+            foreach ($files as $f) {
+              $total += strlen(file_get_contents($f));
+            }
+            echo round((microtime(true) - $t) * 1000);
+          ')
+          IO_MS=$(echo "$RAW_IO" | tail -n 1 | tr -dc '0-9')
+          echo "IO_MS=${IO_MS:-0}" >> $GITHUB_ENV
+          echo "Docker bind mount I/O took ${IO_MS:-0} ms"
+
+      - name: Run HTTP Latency Benchmark (100 GET requests)
+        run: |
+          cd /tmp/bench-app
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8080 | grep -q 'ok'; then
+              echo "HTTP server ready!"
+              break
+            fi
+            sleep 0.5
+          done
+          RAW_HTTP=$(node $GITHUB_WORKSPACE/scripts/bench-http.js http://127.0.0.1:8080/ 100)
+          HTTP_MS=$(echo "$RAW_HTTP" | tail -n 1 | tr -dc '0-9')
+          echo "HTTP_MS=${HTTP_MS:-0}" >> $GITHUB_ENV
+          echo "Docker 100 HTTP requests took ${HTTP_MS:-0} ms"
 
       - name: Teardown test app
         run: |
@@ -78,8 +128,13 @@ jobs:
           {
             "engine": "docker",
             "cold_boot_ms": ${{ env.BOOT_MS }},
+            "warm_restart_ms": ${{ env.WARM_MS }},
             "cli_exec_ms": ${{ env.EXEC_MS }},
-            "cli_runs": 10
+            "cli_runs": 20,
+            "io_read_ms": ${{ env.IO_MS }},
+            "io_files": 500,
+            "http_ms": ${{ env.HTTP_MS }},
+            "http_requests": 100
           }
           EOF
 
@@ -146,12 +201,12 @@ jobs:
           lando --clear
           lando kiri-doctor
 
-      - name: Ensure ports 80 and 443 are free
+      - name: Ensure ports 80, 443 and 8080 are free
         run: sudo systemctl stop nginx apache2 || true
 
       - name: Prepare test app
         run: |
-          mkdir -p /tmp/bench-app
+          mkdir -p /tmp/bench-app/fixtures
           cd /tmp/bench-app
           cat << 'EOF' > .lando.yml
           name: bench-app
@@ -162,11 +217,20 @@ jobs:
             composer_version: false
             database: mariadb:10.11
           services:
+            appserver:
+              overrides:
+                ports:
+                  - "8080:80"
             database:
               overrides:
                 user: "1001:0"
           EOF
           echo "<?php echo 'ok';" > index.php
+
+          # Create 500 fixture PHP files to measure bind mount I/O performance
+          for i in {1..500}; do
+            echo "<?php return 'fixture_data_$i';" > fixtures/file_$i.php
+          done
 
       - name: Run Cold Boot Benchmark (Pull & Start from scratch)
         run: |
@@ -178,17 +242,58 @@ jobs:
           echo "BOOT_MS=$BOOT_MS" >> $GITHUB_ENV
           echo "Kiri cold boot took ${BOOT_MS} ms"
 
-      - name: Run CLI Exec Benchmark (10 iterations)
+      - name: Run Warm Restart Benchmark (lando restart)
         run: |
           cd /tmp/bench-app
           START=$(date +%s%3N)
-          for i in {1..10}; do
+          lando restart -y
+          END=$(date +%s%3N)
+          WARM_MS=$((END - START))
+          echo "WARM_MS=$WARM_MS" >> $GITHUB_ENV
+          echo "Kiri warm restart took ${WARM_MS} ms"
+
+      - name: Run CLI Exec Benchmark (20 iterations)
+        run: |
+          cd /tmp/bench-app
+          START=$(date +%s%3N)
+          for i in {1..20}; do
             lando php -r "echo 'ok';" > /dev/null
           done
           END=$(date +%s%3N)
           EXEC_MS=$((END - START))
           echo "EXEC_MS=$EXEC_MS" >> $GITHUB_ENV
-          echo "Kiri 10x CLI exec took ${EXEC_MS} ms"
+          echo "Kiri 20x CLI exec took ${EXEC_MS} ms"
+
+      - name: Run Bind Mount Filesystem I/O Benchmark (500 files)
+        run: |
+          cd /tmp/bench-app
+          RAW_IO=$(lando php -r '
+            $t = microtime(true);
+            $files = glob("fixtures/*.php");
+            $total = 0;
+            foreach ($files as $f) {
+              $total += strlen(file_get_contents($f));
+            }
+            echo round((microtime(true) - $t) * 1000);
+          ')
+          IO_MS=$(echo "$RAW_IO" | tail -n 1 | tr -dc '0-9')
+          echo "IO_MS=${IO_MS:-0}" >> $GITHUB_ENV
+          echo "Kiri bind mount I/O took ${IO_MS:-0} ms"
+
+      - name: Run HTTP Latency Benchmark (100 GET requests)
+        run: |
+          cd /tmp/bench-app
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8080 | grep -q 'ok'; then
+              echo "HTTP server ready!"
+              break
+            fi
+            sleep 0.5
+          done
+          RAW_HTTP=$(node $GITHUB_WORKSPACE/scripts/bench-http.js http://127.0.0.1:8080/ 100)
+          HTTP_MS=$(echo "$RAW_HTTP" | tail -n 1 | tr -dc '0-9')
+          echo "HTTP_MS=${HTTP_MS:-0}" >> $GITHUB_ENV
+          echo "Kiri 100 HTTP requests took ${HTTP_MS:-0} ms"
 
       - name: Teardown test app
         run: |
@@ -203,8 +308,13 @@ jobs:
             "engine": "kiri",
             "kiri_version": "${{ env.KIRI_VERSION }}",
             "cold_boot_ms": ${{ env.BOOT_MS }},
+            "warm_restart_ms": ${{ env.WARM_MS }},
             "cli_exec_ms": ${{ env.EXEC_MS }},
-            "cli_runs": 10
+            "cli_runs": 20,
+            "io_read_ms": ${{ env.IO_MS }},
+            "io_files": 500,
+            "http_ms": ${{ env.HTTP_MS }},
+            "http_requests": 100
           }
           EOF
 

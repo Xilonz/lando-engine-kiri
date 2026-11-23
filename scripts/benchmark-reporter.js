@@ -16,62 +16,86 @@ if (!fs.existsSync(dockerPath) || !fs.existsSync(kiriPath)) {
 const docker = JSON.parse(fs.readFileSync(dockerPath, 'utf8'));
 const kiri = JSON.parse(fs.readFileSync(kiriPath, 'utf8'));
 
-// Cold boot metrics
-const dockerBootSec = (docker.cold_boot_ms / 1000).toFixed(1);
-const kiriBootSec = (kiri.cold_boot_ms / 1000).toFixed(1);
-const bootFaster = docker.cold_boot_ms >= kiri.cold_boot_ms;
-const bootPct = Math.abs(((docker.cold_boot_ms - kiri.cold_boot_ms) / docker.cold_boot_ms) * 100).toFixed(1);
-const bootBadgeColor = bootFaster ? 'brightgreen' : 'orange';
-const bootDiffText = bootFaster ? `**${bootPct}% faster** ⚡` : `**${bootPct}% slower**`;
-
-// CLI exec metrics
-const dockerExecSec = (docker.cli_exec_ms / 1000).toFixed(1);
-const kiriExecSec = (kiri.cli_exec_ms / 1000).toFixed(1);
-const dockerAvgMs = Math.round(docker.cli_exec_ms / (docker.cli_runs || 10));
-const kiriAvgMs = Math.round(kiri.cli_exec_ms / (kiri.cli_runs || 10));
-const execFaster = docker.cli_exec_ms >= kiri.cli_exec_ms;
-const execPct = Math.abs(((docker.cli_exec_ms - kiri.cli_exec_ms) / docker.cli_exec_ms) * 100).toFixed(1);
-const execBadgeColor = execFaster ? 'brightgreen' : 'orange';
-const execDiffText = execFaster ? `**${execPct}% faster** ⚡` : `**${execPct}% slower**`;
+function calcComparison(dockerVal, kiriVal, lowerIsBetter = true) {
+  if (dockerVal === undefined || kiriVal === undefined) return null;
+  const isFaster = lowerIsBetter ? dockerVal >= kiriVal : kiriVal >= dockerVal;
+  const pct = Math.abs(((dockerVal - kiriVal) / dockerVal) * 100).toFixed(1);
+  const color = isFaster ? 'brightgreen' : 'orange';
+  const text = isFaster ? `**${pct}% faster** ⚡` : `**${pct}% slower**`;
+  return { isFaster, pct, color, text };
+}
 
 const dateStr = new Date().toISOString().split('T')[0];
 const kiriVer = kiri.kiri_version ? `v${kiri.kiri_version}` : 'latest';
 
-// Generate shields
-const bootBadgeUrl = `https://img.shields.io/badge/Cold%20Boot-${bootPct}%25%20${bootFaster ? 'faster' : 'slower'}-${bootBadgeColor}?style=flat-square`;
-const execBadgeUrl = `https://img.shields.io/badge/CLI%20Exec-${execPct}%25%20${execFaster ? 'faster' : 'slower'}-${execBadgeColor}?style=flat-square`;
+const tableRows = [];
+const badges = [];
+
+// 1. Cold boot
+if (docker.cold_boot_ms && kiri.cold_boot_ms) {
+  const comp = calcComparison(docker.cold_boot_ms, kiri.cold_boot_ms);
+  tableRows.push(`| **Cold Boot (Pull & First Start)** | ${(docker.cold_boot_ms / 1000).toFixed(1)}s | ${(kiri.cold_boot_ms / 1000).toFixed(1)}s | ${comp.text} |`);
+  badges.push(`[![Cold Boot](https://img.shields.io/badge/Cold%20Boot-${comp.pct}%25%20${comp.isFaster ? 'faster' : 'slower'}-${comp.color}?style=flat-square)](#performance-benchmarks)`);
+}
+
+// 2. Warm restart
+if (docker.warm_restart_ms && kiri.warm_restart_ms) {
+  const comp = calcComparison(docker.warm_restart_ms, kiri.warm_restart_ms);
+  tableRows.push(`| **Warm Restart (\`lando restart\`)** | ${(docker.warm_restart_ms / 1000).toFixed(1)}s | ${(kiri.warm_restart_ms / 1000).toFixed(1)}s | ${comp.text} |`);
+  badges.push(`[![Warm Restart](https://img.shields.io/badge/Warm%20Restart-${comp.pct}%25%20${comp.isFaster ? 'faster' : 'slower'}-${comp.color}?style=flat-square)](#performance-benchmarks)`);
+}
+
+// 3. CLI exec
+if (docker.cli_exec_ms && kiri.cli_exec_ms) {
+  const comp = calcComparison(docker.cli_exec_ms, kiri.cli_exec_ms);
+  const runs = kiri.cli_runs || 20;
+  const dockerAvg = Math.round(docker.cli_exec_ms / runs);
+  const kiriAvg = Math.round(kiri.cli_exec_ms / runs);
+  tableRows.push(`| **CLI Exec Overhead (${runs}x \`lando php\`)** | ${(docker.cli_exec_ms / 1000).toFixed(1)}s (${dockerAvg}ms/call) | ${(kiri.cli_exec_ms / 1000).toFixed(1)}s (${kiriAvg}ms/call) | ${comp.text} |`);
+  badges.push(`[![CLI Overhead](https://img.shields.io/badge/CLI%20Exec-${comp.pct}%25%20${comp.isFaster ? 'faster' : 'slower'}-${comp.color}?style=flat-square)](#performance-benchmarks)`);
+}
+
+// 4. Bind mount I/O
+if (docker.io_read_ms && kiri.io_read_ms) {
+  const comp = calcComparison(docker.io_read_ms, kiri.io_read_ms);
+  const files = kiri.io_files || 500;
+  tableRows.push(`| **Bind Mount I/O (Read ${files} files)** | ${docker.io_read_ms}ms | ${kiri.io_read_ms}ms | ${comp.text} |`);
+}
+
+// 5. HTTP Latency
+if (docker.http_ms && kiri.http_ms) {
+  const comp = calcComparison(docker.http_ms, kiri.http_ms);
+  const reqs = kiri.http_requests || 100;
+  const dockerAvgReq = (docker.http_ms / reqs).toFixed(1);
+  const kiriAvgReq = (kiri.http_ms / reqs).toFixed(1);
+  tableRows.push(`| **HTTP Latency (${reqs} GET requests)** | ${(docker.http_ms / 1000).toFixed(2)}s (${dockerAvgReq}ms/req) | ${(kiri.http_ms / 1000).toFixed(2)}s (${kiriAvgReq}ms/req) | ${comp.text} |`);
+}
 
 const badgesMarkdown = `<!-- BENCHMARK_BADGES:START -->
-[![Cold Boot](${bootBadgeUrl})](#performance-benchmarks)
-[![CLI Overhead](${execBadgeUrl})](#performance-benchmarks)
+${badges.join('\n')}
 <!-- BENCHMARK_BADGES:END -->`;
 
-// Generate Markdown Table
 const tableMarkdown = `<!-- BENCHMARK_TABLE:START -->
 ## Performance Benchmarks
 
 > Automated benchmark executed on GitHub Actions runner (\`ubuntu-latest\`, 2 vCPU, 7GB RAM).  
-> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11 — fresh pull and start from scratch).
+> Stack: LAMP recipe (Apache, PHP 8.2, MariaDB 10.11).
 
 | Metric | Docker Engine | Kiri Engine | Difference |
 | :--- | :--- | :--- | :--- |
-| **Cold Boot (Pull & First Start)** | ${dockerBootSec}s | ${kiriBootSec}s | ${bootDiffText} |
-| **CLI Exec Overhead (${kiri.cli_runs || 10}x \`lando php\`)** | ${dockerExecSec}s (${dockerAvgMs}ms/call) | ${kiriExecSec}s (${kiriAvgMs}ms/call) | ${execDiffText} |
+${tableRows.join('\n')}
 
 *Last benchmark run: ${dateStr} (Kiri ${kiriVer})*
 <!-- BENCHMARK_TABLE:END -->`;
 
 console.log('--- Benchmark Results ---');
-console.log(`Cold Boot: Docker ${dockerBootSec}s vs Kiri ${kiriBootSec}s (${bootPct}% ${bootFaster ? 'faster' : 'slower'})`);
-console.log(`CLI Exec: Docker ${dockerExecSec}s vs Kiri ${kiriExecSec}s (${execPct}% ${execFaster ? 'faster' : 'slower'})`);
+console.log(tableRows.join('\n'));
 console.log('-------------------------');
 
-// Write to GITHUB_STEP_SUMMARY if available
 if (process.env.GITHUB_STEP_SUMMARY) {
   fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n${tableMarkdown}\n`);
 }
 
-// Update README.md
 if (fs.existsSync(readmePath)) {
   let readme = fs.readFileSync(readmePath, 'utf8');
 
@@ -80,7 +104,6 @@ if (fs.existsSync(readmePath)) {
   if (badgeRegex.test(readme)) {
     readme = readme.replace(badgeRegex, badgesMarkdown);
   } else {
-    // If not present yet, inject after existing badges
     readme = readme.replace(
       /(\[!\[License: MIT\]\(.*?\)\]\(.*?\)\n)/,
       `$1${badgesMarkdown}\n`
@@ -92,7 +115,6 @@ if (fs.existsSync(readmePath)) {
   if (tableRegex.test(readme)) {
     readme = readme.replace(tableRegex, tableMarkdown);
   } else {
-    // Append table before License or at the end
     if (readme.includes('## License')) {
       readme = readme.replace('## License', `${tableMarkdown}\n\n---\n\n## License`);
     } else {
